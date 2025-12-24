@@ -178,14 +178,24 @@ ponder.on("ECSRegistry_Sepolia:ResolverChanged", async ({ event, context }) => {
   const resolverAddr = resolver === "0x0000000000000000000000000000000000000000" ? null : resolver.toLowerCase();
   
   try {
-    await context.db
-      .update(credentials, { id: credentialId })
-      .set({
-        resolverAddress: resolverAddr as `0x${string}` | undefined,
-        resolverUpdatedAt: event.block.timestamp,
-        lastUpdateBlock: event.block.number,
-        lastUpdateTimestamp: event.block.timestamp,
-      });
+    // Check if credential exists before updating
+    const existingCredential = await context.db.find(credentials, { id: credentialId });
+    
+    if (existingCredential) {
+      await context.db
+        .update(credentials, { id: credentialId })
+        .set({
+          resolverAddress: resolverAddr as `0x${string}` | undefined,
+          resolverUpdatedAt: event.block.timestamp,
+          lastUpdateBlock: event.block.number,
+          lastUpdateTimestamp: event.block.timestamp,
+        });
+    } else {
+      // Credential doesn't exist yet - this can happen during backfill
+      // The NewLabelhashOwner event will create it with the resolver
+      console.log(`⚠️ ResolverChanged for unknown credential ${labelhash} - will be created by NewLabelhashOwner`);
+      return;
+    }
     
     // Also update the resolver's labelhash if it's a known resolver
     if (resolverAddr) {
