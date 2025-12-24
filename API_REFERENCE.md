@@ -5,7 +5,7 @@ Complete API documentation for the ECS Indexer - tracking the Ethereum Credentia
 ## Current Deployment Status
 
 **🟢 LOCAL**: `http://localhost:42069`  
-**🟡 PRODUCTION**: Deploy to Render (see README)
+**🟢 PRODUCTION**: https://ecs-indexer.onrender.com
 
 ### Indexed Contracts (Sepolia Testnet)
 
@@ -18,9 +18,10 @@ Complete API documentation for the ECS Indexer - tracking the Ethereum Credentia
 
 ### Architecture
 - **🌐 Multi-Chain Ready**: Sepolia active, Mainnet ready
-- **Database**: PGLite (Local development) / PostgreSQL (Production)
+- **Database**: PGLite (Local development) / PostgreSQL (Production via Render)
 - **Factory Pattern**: Dynamic discovery of CredentialResolver clones via factory events
 - **Standards**: ERC-8049 (contract metadata), ENS Extended Resolvers
+- **Node Version**: 18.17.0 (pinned for memory optimization)
 
 ### Key Features
 - ✅ **Credential Tracking**: All registered labels (e.g., name-stars.ecs.eth)
@@ -39,10 +40,12 @@ Complete API documentation for the ECS Indexer - tracking the Ethereum Credentia
 http://localhost:42069
 ```
 
-**Production (after deployment):**
+**Production:**
 ```
 https://ecs-indexer.onrender.com
 ```
+
+**Status:** ✅ Live and operational
 
 ---
 
@@ -744,5 +747,7 @@ console.log(metadata['eth.ecs.name-stars.starts:vitalik.eth']); // "100"
 ## Support
 
 - **GitHub**: https://github.com/nxt3d/ecs-indexer
+- **Production API**: https://ecs-indexer.onrender.com
 - **ECS Protocol**: https://github.com/nxt3d/ecs
 - **Local Logs**: Check terminal running `pnpm dev`
+- **Production Logs**: Check Render dashboard → `ecs-indexer` → Logs

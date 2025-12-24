@@ -59,6 +59,10 @@ pnpm dev
 
 The indexer will start syncing and expose an API at `http://localhost:42069`.
 
+**Requirements:**
+- Node.js 18.17.0+ (pinned in `.nvmrc` and `package.json`)
+- pnpm (installed automatically during build)
+
 ## API Documentation
 
 See [API_REFERENCE.md](./API_REFERENCE.md) for complete API documentation.
@@ -85,17 +89,22 @@ curl -H "Authorization: Bearer sk-ecs-YOUR_KEY" \
 
 ## Deployment to Render
 
+**Production URL:** https://ecs-indexer.onrender.com
+
 1. Push this repository to GitHub
 2. Go to [render.com](https://render.com) and create a new **Blueprint**
-3. Connect your GitHub repository
+3. Connect your GitHub repository (`nxt3d/ecs-indexer`)
 4. Render will detect `render.yaml` and auto-configure:
    - Web service: `ecs-indexer`
-   - PostgreSQL database: `ecs-indexer-db`
+   - PostgreSQL database: `ecs-indexer-db` (free tier)
 5. Set environment variables in Render dashboard:
-   - `PONDER_RPC_URL_11155111` - Your Sepolia RPC URL
+   - `PONDER_RPC_URL_11155111` - Your Sepolia RPC URL (required)
    - `API_KEY` - Your secure API key (generate with: `node -e "console.log('sk-ecs-' + require('crypto').randomBytes(32).toString('base64url'))"`)
    - `ALLOWED_ORIGINS` - Comma-separated allowed origins (e.g., `https://yourdomain.com`)
-6. Deploy and verify: `curl https://ecs-indexer.onrender.com/api/health`
+6. The database will be automatically linked and `DATABASE_URL` injected
+7. Deploy and verify: `curl https://ecs-indexer.onrender.com/api/health`
+
+**Note:** If you create the service manually instead of using Blueprint, you'll need to manually create and link the PostgreSQL database. The `render.yaml` database section only applies when using Blueprint.
 
 ## Database Schema
 
