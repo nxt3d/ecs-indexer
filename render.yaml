@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: ecs-indexer
+    env: node
+    buildCommand: npm install -g pnpm && pnpm install
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Memory optimization for 512MB Starter plan
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=400"
+      - key: PONDER_TELEMETRY_DISABLED
+        value: "true"
+      # RPC URLs - Set in Render dashboard
+      - key: PONDER_RPC_URL_11155111
+        sync: false
+      - key: PONDER_RPC_URL_1
+        sync: false
+      # API Configuration - Set in Render dashboard
+      - key: API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Database Configuration
+      - key: DATABASE_URL  
+        fromDatabase:
+          name: ecs-indexer-db
+          property: connectionString
+      - key: DATABASE_SCHEMA
+        value: public
+      # Start Block Configuration (ECS deployed at block 9900685)
+      - key: SEPOLIA_START_BLOCK
+        value: "9900600"
+    
+databases:
+  - name: ecs-indexer-db
+    databaseName: ecs_indexer
+    user: ecs_indexer_user
+    plan: free

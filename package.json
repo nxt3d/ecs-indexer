@@ -1,0 +1,37 @@
+{
+  "name": "ecs-indexer",
+  "version": "1.0.0",
+  "description": "High-performance indexer for the Ethereum Credential Service (ECS) protocol",
+  "author": "@nxt3d",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start",
+    "codegen": "ponder codegen",
+    "test": "node scripts/test-api.js",
+    "test:local": "node scripts/test-api.js http://localhost:42069"
+  },
+  "dependencies": {
+    "hono": "4.8.8",
+    "ponder": "0.14.5",
+    "viem": "2.33.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "keywords": [
+    "ethereum",
+    "indexer",
+    "ecs",
+    "credentials",
+    "ens",
+    "ponder",
+    "sepolia",
+    "erc-8049"
+  ]
+}
