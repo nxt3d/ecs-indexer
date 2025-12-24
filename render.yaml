@@ -29,7 +29,8 @@ services:
           name: ecs-indexer-db
           property: connectionString
       - key: DATABASE_SCHEMA
-        value: public
+        value: "public"
+        sync: false
       # Start Block Configuration (ECS deployed at block 9900685)
       - key: SEPOLIA_START_BLOCK
         value: "9900600"
