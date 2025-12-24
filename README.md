@@ -2,6 +2,9 @@
 
 High-performance indexer for the **Ethereum Credential Service (ECS)** protocol using [Ponder](https://ponder.sh).
 
+**🟢 Production:** https://ecs-indexer.onrender.com  
+**Status:** Live and operational on Sepolia testnet
+
 ## Overview
 
 ECS is a decentralized registry of Smart Credentials—verifiable onchain or offchain data about any identity. This indexer tracks all ECS protocol activity including credential registrations, resolver deployments, ERC-8049 metadata updates, and more.
