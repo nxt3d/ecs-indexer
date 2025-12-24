@@ -3,7 +3,7 @@ services:
     name: ecs-indexer
     env: node
     buildCommand: npm install -g pnpm && pnpm install
-    startCommand: pnpm start
+    startCommand: DATABASE_SCHEMA=public pnpm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
