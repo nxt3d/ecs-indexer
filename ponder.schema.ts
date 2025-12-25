@@ -200,3 +200,47 @@ export const approvals = onchainTable("approvals", (t) => ({
   setAtTimestamp: t.bigint().notNull(),
   setAtTxHash: t.hex().notNull(),
 }));
+
+/* --- ERC-8048 Token Metadata --- */
+
+// Track ERC-8048 token-level metadata (tokenId + key)
+export const tokenMetadata = onchainTable("token_metadata", (t) => ({
+  id: t.text().primaryKey(), // Format: "chainId-contractAddress-tokenId-key"
+  contractAddress: t.hex().notNull(),
+  chainId: t.integer().notNull(),
+  
+  tokenId: t.bigint().notNull(),
+  key: t.text().notNull(),
+  value: t.text().notNull(), // Store as hex string
+  
+  // Timestamps
+  setAtBlock: t.bigint().notNull(),
+  setAtTimestamp: t.bigint().notNull(),
+  setAtTxHash: t.hex().notNull(),
+  
+  // Last update tracking
+  lastUpdateBlock: t.bigint().notNull(),
+  lastUpdateTimestamp: t.bigint().notNull(),
+}));
+
+/* --- ERCXXXXReviews --- */
+
+// Track reviews submitted via ERCXXXXReviews extension
+export const reviews = onchainTable("reviews", (t) => ({
+  id: t.text().primaryKey(), // Format: "chainId-contractAddress-reviewerId-reviewedId"
+  contractAddress: t.hex().notNull(),
+  chainId: t.integer().notNull(),
+  
+  reviewerId: t.bigint().notNull(),
+  reviewedId: t.bigint().notNull(),
+  reviewData: t.text().notNull(), // Store as hex string
+  
+  // Timestamps
+  submittedAtBlock: t.bigint().notNull(),
+  submittedAtTimestamp: t.bigint().notNull(),
+  submittedAtTxHash: t.hex().notNull(),
+  
+  // Last update tracking
+  lastUpdateBlock: t.bigint().notNull(),
+  lastUpdateTimestamp: t.bigint().notNull(),
+}));

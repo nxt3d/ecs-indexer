@@ -8,7 +8,9 @@ import {
   credentialTransfers,
   resolverTransfers,
   renewals,
-  approvals
+  approvals,
+  tokenMetadata,
+  reviews
 } from "../ponder.schema";
 
 /* --- Chain Helper --- */
@@ -34,11 +36,57 @@ function getChainInfo(handlerName?: string): { chainId: number; chainName: strin
 
 /* --- Validation Helpers --- */
 
-// Check if a resolver address is known (deployed by our factory)
+// Check if a resolver address is known (factory-deployed OR custom resolver registered in ECS)
 async function isKnownResolver(context: any, chainId: number, address: string): Promise<boolean> {
   const resolverId = `${chainId}-${address.toLowerCase()}`;
   const resolver = await context.db.find(resolvers, { id: resolverId });
   return resolver !== null;
+}
+
+// Ensure resolver record exists (for custom resolvers discovered via ResolverChanged)
+async function ensureResolverRecord(
+  context: any,
+  chainId: number,
+  chainName: string,
+  resolverAddress: string,
+  blockNumber: bigint,
+  timestamp: bigint,
+  txHash: `0x${string}`
+): Promise<void> {
+  const resolverId = `${chainId}-${resolverAddress.toLowerCase()}`;
+  const existing = await context.db.find(resolvers, { id: resolverId });
+  
+  if (!existing) {
+    // Try to get owner (might fail for custom resolvers without standard owner() function)
+    let owner: `0x${string}` = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+    try {
+      // Try to read owner from contract (works for Ownable contracts)
+      owner = await context.client.readContract({
+        address: resolverAddress as `0x${string}`,
+        abi: [{ type: "function", name: "owner", inputs: [], outputs: [{ type: "address" }], stateMutability: "view" }],
+        functionName: "owner",
+      }) as `0x${string}`;
+    } catch (e) {
+      // Not an Ownable contract, use zero address
+    }
+    
+    await context.db.insert(resolvers).values({
+      id: resolverId,
+      resolverAddress: resolverAddress.toLowerCase() as `0x${string}`,
+      chainId,
+      chainName,
+      owner: owner.toLowerCase() as `0x${string}`,
+      labelhash: null,
+      label: null,
+      ethAddress: null,
+      contenthash: null,
+      deployedAtBlock: blockNumber,
+      deployedAtTimestamp: timestamp,
+      deployedAtTxHash: txHash,
+      lastUpdateBlock: blockNumber,
+      lastUpdateTimestamp: timestamp,
+    }).onConflictDoNothing();
+  }
 }
 
 /* ================================================================
@@ -197,8 +245,19 @@ ponder.on("ECSRegistry_Sepolia:ResolverChanged", async ({ event, context }) => {
       return;
     }
     
-    // Also update the resolver's labelhash if it's a known resolver
+    // Also update/create the resolver record (for both factory-deployed and custom resolvers)
     if (resolverAddr) {
+      // Ensure resolver record exists (creates if custom resolver)
+      await ensureResolverRecord(
+        context,
+        chainId,
+        chainName,
+        resolverAddr,
+        event.block.number,
+        event.block.timestamp,
+        event.transaction.hash
+      );
+      
       const resolverId = `${chainId}-${resolverAddr}`;
       const existingResolver = await context.db.find(resolvers, { id: resolverId });
       
@@ -600,7 +659,7 @@ ponder.on("CredentialResolver_Sepolia:OwnershipTransferred", async ({ event, con
   const resolverAddress = event.log.address;
   const { chainId, chainName } = getChainInfo("CredentialResolver_Sepolia");
   
-  // Skip if not a factory-deployed resolver
+  // Skip if not a known resolver (factory-deployed or custom)
   if (!(await isKnownResolver(context, chainId, resolverAddress))) {
     return;
   }
@@ -633,5 +692,187 @@ ponder.on("CredentialResolver_Sepolia:OwnershipTransferred", async ({ event, con
     console.log(`🔄 Resolver ${resolverAddress} ownership transferred: ${previousOwner} -> ${newOwner}`);
   } catch (error) {
     console.error(`❌ Failed to transfer resolver ownership:`, error);
+  }
+});
+
+/* ================================================================
+   ERC-8048 TOKEN METADATA EVENT HANDLERS
+   ================================================================ */
+
+// Handle ERC-8048 token metadata updates (from factory-deployed resolvers)
+ponder.on("CredentialResolver_Sepolia:MetadataSet", async ({ event, context }) => {
+  const { tokenId, key, value } = event.args;
+  const contractAddress = event.log.address;
+  const { chainId, chainName } = getChainInfo("CredentialResolver_Sepolia");
+  
+  // Only index if this is a known resolver (factory-deployed or custom)
+  if (!(await isKnownResolver(context, chainId, contractAddress))) {
+    return;
+  }
+  
+  const metadataId = `${chainId}-${contractAddress.toLowerCase()}-${tokenId}-${key}`;
+  const hexValue = typeof value === 'string' ? value : `0x${Buffer.from(value).toString('hex')}`;
+  
+  try {
+    await context.db.insert(tokenMetadata).values({
+      id: metadataId,
+      contractAddress: contractAddress.toLowerCase() as `0x${string}`,
+      chainId,
+      tokenId,
+      key,
+      value: hexValue,
+      setAtBlock: event.block.number,
+      setAtTimestamp: event.block.timestamp,
+      setAtTxHash: event.transaction.hash,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }).onConflictDoUpdate(() => ({
+      value: hexValue,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }));
+    
+    console.log(`📋 ERC-8048 token metadata set on ${contractAddress}: tokenId=${tokenId}, key=${key}`);
+  } catch (error) {
+    console.error(`❌ Failed to store ERC-8048 token metadata:`, error);
+  }
+});
+
+// Handle ERC-8048 token metadata updates (from custom resolvers)
+ponder.on("CustomResolver_Sepolia:MetadataSet", async ({ event, context }) => {
+  const { tokenId, key, value } = event.args;
+  const contractAddress = event.log.address;
+  const { chainId, chainName } = getChainInfo("CustomResolver_Sepolia");
+  
+  // Ensure resolver record exists (created when ResolverChanged fired)
+  await ensureResolverRecord(
+    context,
+    chainId,
+    chainName,
+    contractAddress,
+    event.block.number,
+    event.block.timestamp,
+    event.transaction.hash
+  );
+  
+  const metadataId = `${chainId}-${contractAddress.toLowerCase()}-${tokenId}-${key}`;
+  const hexValue = typeof value === 'string' ? value : `0x${Buffer.from(value).toString('hex')}`;
+  
+  try {
+    await context.db.insert(tokenMetadata).values({
+      id: metadataId,
+      contractAddress: contractAddress.toLowerCase() as `0x${string}`,
+      chainId,
+      tokenId,
+      key,
+      value: hexValue,
+      setAtBlock: event.block.number,
+      setAtTimestamp: event.block.timestamp,
+      setAtTxHash: event.transaction.hash,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }).onConflictDoUpdate(() => ({
+      value: hexValue,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }));
+    
+    console.log(`📋 ERC-8048 token metadata set on ${contractAddress}: tokenId=${tokenId}, key=${key}`);
+  } catch (error) {
+    console.error(`❌ Failed to store ERC-8048 token metadata:`, error);
+  }
+});
+
+/* ================================================================
+   ERCXXXXREVIEWS EVENT HANDLERS
+   ================================================================ */
+
+// Handle ERCXXXXReviews review submissions (from factory-deployed resolvers)
+ponder.on("CredentialResolver_Sepolia:ReviewSubmitted", async ({ event, context }) => {
+  const { reviewerId, reviewedId, reviewData } = event.args;
+  const contractAddress = event.log.address;
+  const { chainId, chainName } = getChainInfo("CredentialResolver_Sepolia");
+  
+  // Only index if this is a known resolver (factory-deployed or custom)
+  if (!(await isKnownResolver(context, chainId, contractAddress))) {
+    return;
+  }
+  
+  const reviewId = `${chainId}-${contractAddress.toLowerCase()}-${reviewerId}-${reviewedId}`;
+  const hexData = typeof reviewData === 'string' ? reviewData : `0x${Buffer.from(reviewData).toString('hex')}`;
+  
+  try {
+    await context.db.insert(reviews).values({
+      id: reviewId,
+      contractAddress: contractAddress.toLowerCase() as `0x${string}`,
+      chainId,
+      reviewerId,
+      reviewedId,
+      reviewData: hexData,
+      submittedAtBlock: event.block.number,
+      submittedAtTimestamp: event.block.timestamp,
+      submittedAtTxHash: event.transaction.hash,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }).onConflictDoUpdate(() => ({
+      reviewData: hexData,
+      submittedAtBlock: event.block.number,
+      submittedAtTimestamp: event.block.timestamp,
+      submittedAtTxHash: event.transaction.hash,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }));
+    
+    console.log(`⭐ Review submitted on ${contractAddress}: reviewerId=${reviewerId}, reviewedId=${reviewedId}`);
+  } catch (error) {
+    console.error(`❌ Failed to store review:`, error);
+  }
+});
+
+// Handle ERCXXXXReviews review submissions (from custom resolvers)
+ponder.on("CustomResolver_Sepolia:ReviewSubmitted", async ({ event, context }) => {
+  const { reviewerId, reviewedId, reviewData } = event.args;
+  const contractAddress = event.log.address;
+  const { chainId, chainName } = getChainInfo("CustomResolver_Sepolia");
+  
+  // Ensure resolver record exists (created when ResolverChanged fired)
+  await ensureResolverRecord(
+    context,
+    chainId,
+    chainName,
+    contractAddress,
+    event.block.number,
+    event.block.timestamp,
+    event.transaction.hash
+  );
+  
+  const reviewId = `${chainId}-${contractAddress.toLowerCase()}-${reviewerId}-${reviewedId}`;
+  const hexData = typeof reviewData === 'string' ? reviewData : `0x${Buffer.from(reviewData).toString('hex')}`;
+  
+  try {
+    await context.db.insert(reviews).values({
+      id: reviewId,
+      contractAddress: contractAddress.toLowerCase() as `0x${string}`,
+      chainId,
+      reviewerId,
+      reviewedId,
+      reviewData: hexData,
+      submittedAtBlock: event.block.number,
+      submittedAtTimestamp: event.block.timestamp,
+      submittedAtTxHash: event.transaction.hash,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }).onConflictDoUpdate(() => ({
+      reviewData: hexData,
+      submittedAtBlock: event.block.number,
+      submittedAtTimestamp: event.block.timestamp,
+      submittedAtTxHash: event.transaction.hash,
+      lastUpdateBlock: event.block.number,
+      lastUpdateTimestamp: event.block.timestamp,
+    }));
+    
+    console.log(`⭐ Review submitted on ${contractAddress}: reviewerId=${reviewerId}, reviewedId=${reviewedId}`);
+  } catch (error) {
+    console.error(`❌ Failed to store review:`, error);
   }
 });

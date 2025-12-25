@@ -4,6 +4,8 @@ import { ECSRegistryAbi } from "./abis/ECSRegistryAbi";
 import { ECSRegistrarAbi } from "./abis/ECSRegistrarAbi";
 import { CredentialResolverFactoryAbi } from "./abis/CredentialResolverFactoryAbi";
 import { CredentialResolverAbi } from "./abis/CredentialResolverAbi";
+import { ERC8048Abi } from "./abis/ERC8048Abi";
+import { ERCXXXXReviewsAbi } from "./abis/ERCXXXXReviewsAbi";
 
 /* --- Chain Configuration --- */
 
@@ -78,7 +80,7 @@ export default createConfig({
 
     /* --- Credential Resolvers (Smart Credentials) - Dynamically discovered from factory --- */
     CredentialResolver_Sepolia: {
-      abi: CredentialResolverAbi,
+      abi: [...CredentialResolverAbi, ...ERC8048Abi, ...ERCXXXXReviewsAbi] as const,
       chain: "sepolia",
       factory: {
         address: SEPOLIA_FACTORY as `0x${string}`,
@@ -86,6 +88,21 @@ export default createConfig({
           (item) => item.type === "event" && item.name === "ResolverCloneDeployed"
         )!,
         parameter: "clone",
+      },
+      startBlock: SEPOLIA_START_BLOCK,
+    },
+
+    /* --- Custom Resolvers - Dynamically discovered from ECS Registry ResolverChanged events --- */
+    /* This picks up custom resolvers (not factory-deployed) that are registered via ResolverChanged */
+    CustomResolver_Sepolia: {
+      abi: [...ERC8048Abi, ...ERCXXXXReviewsAbi] as const,
+      chain: "sepolia",
+      factory: {
+        address: SEPOLIA_ECS_REGISTRY as `0x${string}`,
+        event: ECSRegistryAbi.find(
+          (item) => item.type === "event" && item.name === "ResolverChanged"
+        )!,
+        parameter: "resolver",
       },
       startBlock: SEPOLIA_START_BLOCK,
     },
